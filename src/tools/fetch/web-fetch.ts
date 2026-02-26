@@ -64,7 +64,7 @@ Use web_fetch as your FIRST choice whenever you need to read the content of a we
 
 - **url** (required): The HTTP or HTTPS URL to fetch
 - **extractMode** (optional): "markdown" (default) or "text" - controls output format
-- **maxChars** (optional): Maximum characters to return (default 50,000)
+- **maxChars** (optional): Maximum characters to return (default 20,000)
 
 ## Returns
 
@@ -86,7 +86,7 @@ Response includes: url, finalUrl, title, text, extractMode, extractor, truncated
 // Constants (identical to OpenClaw)
 // ============================================================================
 
-const DEFAULT_FETCH_MAX_CHARS = 50_000;
+const DEFAULT_FETCH_MAX_CHARS = 20_000;
 const DEFAULT_FETCH_MAX_REDIRECTS = 3;
 const DEFAULT_ERROR_MAX_CHARS = 4_000;
 const DEFAULT_FETCH_USER_AGENT =
