@@ -105,7 +105,7 @@ Set these in the Vercel project dashboard:
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key for the default model (gpt-5.2) |
 | `FINANCIAL_DATASETS_API_KEY` | Yes | Financial Datasets API key for market data |
-| `LIBSQL_URL` | Yes | Turso LibSQL URL (e.g., `libsql://your-db.turso.io`) — memory persistence |
+| `LIBSQL_URL` | Yes | Turso LibSQL URL for persistent chat memory |
 | `LIBSQL_AUTH_TOKEN` | Yes | Turso auth token for the database above |
 | `EXASEARCH_API_KEY` | No | Exa search API key (preferred web search provider) |
 | `TAVILY_API_KEY` | No | Tavily API key (fallback if Exa not set) |
@@ -114,7 +114,7 @@ Set these in the Vercel project dashboard:
 | `DEXTER_MODEL_PROVIDER` | No | Model provider override (default: `openai`) |
 | `DEXTER_MODEL` | No | Model override (default: `gpt-5.2`) |
 
-Without `LIBSQL_URL`, the app falls back to `/tmp/memory.db` on Vercel (ephemeral — lost between invocations). Set up a [Turso](https://turso.tech) database for persistent memory.
+Without `LIBSQL_URL`, the web chat memory cannot be persisted. Set up a [Turso](https://turso.tech) database for durable sessions.
 
 ### Vercel Notes
 

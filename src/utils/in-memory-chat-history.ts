@@ -208,6 +208,20 @@ Select which previous messages are relevant to understanding or answering the cu
   }
 
   /**
+   * Hydrates history from persisted messages without re-summarizing.
+   * Intended for server-side session restore.
+   */
+  loadMessages(messages: Array<{ query: string; answer: string; summary: string | null }>): void {
+    this.relevantMessagesByQuery.clear();
+    this.messages = messages.map((message, index) => ({
+      id: index,
+      query: message.query,
+      answer: message.answer,
+      summary: message.summary,
+    }));
+  }
+
+  /**
    * Returns user queries in chronological order (no LLM call)
    */
   getUserMessages(): string[] {

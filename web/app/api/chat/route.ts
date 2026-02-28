@@ -1,6 +1,8 @@
-import { runAgentForMessage } from '../../../../src/gateway/agent-runner.js';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../../../../src/model/llm.js';
+import { Agent } from '../../../../src/agent/agent.js';
 import type { AgentEvent } from '../../../../src/agent/types.js';
+import { InMemoryChatHistory } from '../../../../src/utils/in-memory-chat-history.js';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../../../../src/model/llm.js';
+import { appendSessionMessage, loadSessionMessages } from '../../../../src/storage/web-chat-store.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,58 +63,79 @@ export async function POST(req: Request) {
 
       const run = async () => {
         try {
-          await runAgentForMessage({
-            sessionKey,
-            query,
+          const history = new InMemoryChatHistory(model);
+          const stored = await loadSessionMessages(sessionKey);
+          if (stored.length > 0) {
+            history.loadMessages(stored);
+          }
+
+          history.saveUserQuery(query);
+
+          const agent = await Agent.create({
             model,
             modelProvider,
             maxIterations: 10,
-            onEvent: async (event: AgentEvent) => {
-              switch (event.type) {
-                case 'tool_start': {
-                  const toolId = `tool-${++toolCounter}`;
-                  toolCalls.push({ tool: event.tool, id: toolId });
-                  send({
-                    type: 'tool-input-available',
-                    toolCallId: toolId,
-                    toolName: event.tool,
-                    input: event.args,
-                  });
-                  break;
-                }
-                case 'tool_end': {
-                  const idx = toolCalls.findIndex((entry) => entry.tool === event.tool);
-                  const toolId = idx >= 0 ? toolCalls.splice(idx, 1)[0]!.id : `tool-${++toolCounter}`;
-                  send({
-                    type: 'tool-output-available',
-                    toolCallId: toolId,
-                    output: event.result,
-                  });
-                  break;
-                }
-                case 'tool_error': {
-                  const idx = toolCalls.findIndex((entry) => entry.tool === event.tool);
-                  const toolId = idx >= 0 ? toolCalls.splice(idx, 1)[0]!.id : `tool-${++toolCounter}`;
-                  send({
-                    type: 'tool-output-available',
-                    toolCallId: toolId,
-                    output: `Error: ${event.error}`,
-                  });
-                  break;
-                }
-                case 'done': {
-                  send({ type: 'text-start', id: textId });
-                  send({ type: 'text-delta', id: textId, delta: event.answer || '' });
-                  send({ type: 'text-end', id: textId });
-                  send({ type: 'finish-step' });
-                  send({ type: 'finish', finishReason: 'stop' });
-                  break;
-                }
-                default:
-                  break;
-              }
-            },
           });
+
+          let finalAnswer = '';
+          for await (const event of agent.run(query, history)) {
+            switch (event.type) {
+              case 'tool_start': {
+                const toolId = `tool-${++toolCounter}`;
+                toolCalls.push({ tool: event.tool, id: toolId });
+                send({
+                  type: 'tool-input-available',
+                  toolCallId: toolId,
+                  toolName: event.tool,
+                  input: event.args,
+                });
+                break;
+              }
+              case 'tool_end': {
+                const idx = toolCalls.findIndex((entry) => entry.tool === event.tool);
+                const toolId = idx >= 0 ? toolCalls.splice(idx, 1)[0]!.id : `tool-${++toolCounter}`;
+                send({
+                  type: 'tool-output-available',
+                  toolCallId: toolId,
+                  output: event.result,
+                });
+                break;
+              }
+              case 'tool_error': {
+                const idx = toolCalls.findIndex((entry) => entry.tool === event.tool);
+                const toolId = idx >= 0 ? toolCalls.splice(idx, 1)[0]!.id : `tool-${++toolCounter}`;
+                send({
+                  type: 'tool-output-available',
+                  toolCallId: toolId,
+                  output: `Error: ${event.error}`,
+                });
+                break;
+              }
+              case 'done': {
+                finalAnswer = event.answer || '';
+                send({ type: 'text-start', id: textId });
+                send({ type: 'text-delta', id: textId, delta: finalAnswer });
+                send({ type: 'text-end', id: textId });
+                send({ type: 'finish-step' });
+                send({ type: 'finish', finishReason: 'stop' });
+                break;
+              }
+              default:
+                break;
+            }
+          }
+
+          if (finalAnswer) {
+            await history.saveAnswer(finalAnswer);
+            const last = history.getMessages().slice(-1)[0];
+            if (last?.answer) {
+              await appendSessionMessage(sessionKey, {
+                query: last.query,
+                answer: last.answer,
+                summary: last.summary,
+              });
+            }
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           send({ type: 'error', errorText: message });

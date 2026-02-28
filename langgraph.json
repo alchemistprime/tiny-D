@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "dexter": "./src/langgraph/dexter-graph.ts:app"
+  }
+}
