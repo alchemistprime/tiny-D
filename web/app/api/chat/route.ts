@@ -1,8 +1,7 @@
-import { Agent } from '../../../../src/agent/agent.js';
-import type { AgentEvent } from '../../../../src/agent/types.js';
-import { InMemoryChatHistory } from '../../../../src/utils/in-memory-chat-history.js';
-import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '../../../../src/model/llm.js';
-import { appendSessionMessage, loadSessionMessages } from '../../../../src/storage/web-chat-store.js';
+import { Agent } from '@dexter/agent/agent.js';
+import { InMemoryChatHistory } from '@dexter/utils/in-memory-chat-history.js';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@dexter/model/llm.js';
+import { appendSessionMessage, loadSessionMessages } from '@dexter/storage/web-chat-store.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,10 +56,7 @@ export async function POST(req: Request) {
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (chunk: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-      };
-
+      const send = createSseSender(controller, encoder);
       send({ type: 'start', messageId });
       send({ type: 'start-step' });
 
@@ -68,8 +64,7 @@ export async function POST(req: Request) {
         try {
           if (deploymentUrl && langsmithApiKey) {
             await streamFromLangSmith({
-              controller,
-              encoder,
+              send,
               query,
               sessionKey,
               deploymentUrl,
@@ -173,16 +168,24 @@ export async function POST(req: Request) {
   });
 }
 
+function createSseSender(
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+): (chunk: Record<string, unknown>) => void {
+  return (chunk) => {
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+  };
+}
+
 async function streamFromLangSmith(args: {
-  controller: ReadableStreamDefaultController;
-  encoder: TextEncoder;
+  send: (chunk: Record<string, unknown>) => void;
   query: string;
   sessionKey: string;
   deploymentUrl: string;
   apiKey: string;
   textId: string;
 }) {
-  const { controller, encoder, query, sessionKey, deploymentUrl, apiKey, textId } = args;
+  const { send, query, sessionKey, deploymentUrl, apiKey, textId } = args;
 
   const apiUrl = deploymentUrl.replace(/\/+$/, '');
   const res = await fetch(`${apiUrl}/runs/stream`, {
@@ -214,10 +217,7 @@ async function streamFromLangSmith(args: {
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => 'Unknown error');
-    controller.enqueue(
-      encoder.encode(`data: ${JSON.stringify({ type: 'error', errorText: text })}\n\n`)
-    );
-    controller.close();
+    send({ type: 'error', errorText: text });
     return;
   }
 
@@ -225,10 +225,6 @@ async function streamFromLangSmith(args: {
   const decoder = new TextDecoder();
   let buffer = '';
   let currentEvent: string | null = null;
-
-  const send = (chunk: Record<string, unknown>) => {
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-  };
 
   let started = false;
   while (true) {

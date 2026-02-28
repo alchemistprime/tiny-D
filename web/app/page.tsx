@@ -78,8 +78,39 @@ function formatToolName(name: string): string {
   );
 }
 
+function getStoredSessionId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('dexter_session_id');
+  } catch {
+    return null;
+  }
+}
+
+function storeSessionId(id: string) {
+  try {
+    window.localStorage.setItem('dexter_session_id', id);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearStoredSessionId() {
+  try {
+    window.localStorage.removeItem('dexter_session_id');
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function Chat() {
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const existing = getStoredSessionId();
+      if (existing) return existing;
+    }
+    return crypto.randomUUID();
+  });
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +139,19 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, [messages.length, status]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const existing = getStoredSessionId();
+    if (!existing || existing !== sessionId) {
+      storeSessionId(sessionId);
+    }
+  }, [sessionId]);
+
   const handleNewChat = () => {
+    const next = crypto.randomUUID();
+    setSessionId(next);
+    clearStoredSessionId();
+    storeSessionId(next);
     setMessages([]);
     setInput('');
   };

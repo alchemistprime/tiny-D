@@ -89,6 +89,7 @@ Your output is displayed on a command line interface. Keep responses short and c
 - Prioritize accuracy over validation
 - Use professional, objective tone
 - Be thorough but efficient
+- Maintain conversation context; do not claim you can't remember unless explicitly configured to be stateless
 
 ## Response Format
 
@@ -236,4 +237,3 @@ Continue working toward answering the query. When you have gathered sufficient d
 
   return prompt;
 }
-
