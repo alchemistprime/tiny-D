@@ -46,6 +46,9 @@ export async function POST(req: Request) {
   const model = process.env.DEXTER_MODEL ?? DEFAULT_MODEL;
   const sessionKey = memory?.thread || `web-${crypto.randomUUID()}`;
 
+  const deploymentUrl = process.env.LANGSMITH_DEPLOYMENT_URL;
+  const langsmithApiKey = process.env.LANGSMITH_API_KEY;
+
   const encoder = new TextEncoder();
   const toolCalls: ToolCallRecord[] = [];
   let toolCounter = 0;
@@ -63,6 +66,19 @@ export async function POST(req: Request) {
 
       const run = async () => {
         try {
+          if (deploymentUrl && langsmithApiKey) {
+            await streamFromLangSmith({
+              controller,
+              encoder,
+              query,
+              sessionKey,
+              deploymentUrl,
+              apiKey: langsmithApiKey,
+              textId,
+            });
+            return;
+          }
+
           const history = new InMemoryChatHistory(model);
           const stored = await loadSessionMessages(sessionKey);
           if (stored.length > 0) {
@@ -155,4 +171,118 @@ export async function POST(req: Request) {
       Connection: 'keep-alive',
     },
   });
+}
+
+async function streamFromLangSmith(args: {
+  controller: ReadableStreamDefaultController;
+  encoder: TextEncoder;
+  query: string;
+  sessionKey: string;
+  deploymentUrl: string;
+  apiKey: string;
+  textId: string;
+}) {
+  const { controller, encoder, query, sessionKey, deploymentUrl, apiKey, textId } = args;
+
+  const apiUrl = deploymentUrl.replace(/\/+$/, '');
+  const res = await fetch(`${apiUrl}/runs/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'x-session-id': sessionKey,
+    },
+    body: JSON.stringify({
+      assistant_id: 'dexter',
+      input: {
+        messages: [
+          {
+            role: 'human',
+            content: query,
+          },
+        ],
+      },
+      stream_mode: ['messages-tuple'],
+      config: {
+        configurable: {
+          'x-session-id': sessionKey,
+          session_id: sessionKey,
+        },
+      },
+    }),
+  });
+
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => 'Unknown error');
+    controller.enqueue(
+      encoder.encode(`data: ${JSON.stringify({ type: 'error', errorText: text })}\n\n`)
+    );
+    controller.close();
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let currentEvent: string | null = null;
+
+  const send = (chunk: Record<string, unknown>) => {
+    controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+  };
+
+  let started = false;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) {
+      buffer += decoder.decode(value, { stream: true });
+    }
+    if (done) {
+      buffer += decoder.decode();
+    }
+
+    const lines = buffer.split('\n');
+    buffer = done ? '' : (lines.pop() || '');
+
+    for (const rawLine of lines) {
+      const line = rawLine.trimEnd();
+      if (!line) {
+        currentEvent = null;
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim();
+        continue;
+      }
+      if (!line.startsWith('data:')) continue;
+
+      const dataText = line.slice(5).trim();
+      if (!dataText) continue;
+
+      try {
+        const payload = JSON.parse(dataText);
+        if (currentEvent === 'messages' || currentEvent === 'messages/partial') {
+          const messageChunk = Array.isArray(payload) ? payload[0] : payload?.[0];
+          const delta = messageChunk?.content ?? messageChunk?.text ?? '';
+          if (delta) {
+            if (!started) {
+              send({ type: 'text-start', id: textId });
+              started = true;
+            }
+            send({ type: 'text-delta', id: textId, delta });
+          }
+        }
+      } catch {
+        // ignore parsing errors
+      }
+    }
+
+    if (done) break;
+  }
+
+  if (started) {
+    send({ type: 'text-end', id: textId });
+  }
+  send({ type: 'finish-step' });
+  send({ type: 'finish', finishReason: 'stop' });
+  controller.close();
 }

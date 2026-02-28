@@ -1,6 +1,9 @@
 import { AIMessage, BaseMessage } from '@langchain/core/messages';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import { Annotation, StateGraph, START, END, messagesStateReducer } from '@langchain/langgraph';
 import { Agent } from '../agent/agent.js';
+import { InMemoryChatHistory } from '../utils/in-memory-chat-history.js';
+import { appendSessionMessage, loadSessionMessages } from '../storage/web-chat-store.js';
 
 const State = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -8,6 +11,7 @@ const State = Annotation.Root({
     default: () => [],
   }),
   input: Annotation<string>(),
+  session_id: Annotation<string | undefined>(),
   result: Annotation<string>(),
 });
 
@@ -31,7 +35,21 @@ function resolveQuery(state: GraphState): string {
   return '';
 }
 
-async function runDexter(state: GraphState): Promise<Partial<GraphState>> {
+function resolveSessionId(state: GraphState, config?: RunnableConfig): string | undefined {
+  const configurable = config?.configurable as Record<string, unknown> | undefined;
+  const headerSession = configurable?.['x-session-id'];
+  if (typeof headerSession === 'string' && headerSession.trim()) {
+    return headerSession.trim();
+  }
+
+  if (typeof state.session_id === 'string' && state.session_id.trim()) {
+    return state.session_id.trim();
+  }
+
+  return undefined;
+}
+
+async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Partial<GraphState>> {
   const query = resolveQuery(state).trim();
   if (!query) {
     return {
@@ -40,11 +58,22 @@ async function runDexter(state: GraphState): Promise<Partial<GraphState>> {
     };
   }
 
+  const sessionId = resolveSessionId(state, config);
   const modelProvider = process.env.DEXTER_MODEL_PROVIDER;
   const model = process.env.DEXTER_MODEL;
   const maxIterations = process.env.DEXTER_MAX_ITERATIONS
     ? Number(process.env.DEXTER_MAX_ITERATIONS)
     : undefined;
+
+  const history = new InMemoryChatHistory(model);
+  if (sessionId) {
+    const stored = await loadSessionMessages(sessionId);
+    if (stored.length > 0) {
+      history.loadMessages(stored);
+    }
+  }
+
+  history.saveUserQuery(query);
 
   const agent = await Agent.create({
     ...(modelProvider ? { modelProvider } : {}),
@@ -53,7 +82,7 @@ async function runDexter(state: GraphState): Promise<Partial<GraphState>> {
   });
 
   let answer = '';
-  for await (const event of agent.run(query)) {
+  for await (const event of agent.run(query, history)) {
     if (event.type === 'done') {
       answer = event.answer;
     }
@@ -61,6 +90,18 @@ async function runDexter(state: GraphState): Promise<Partial<GraphState>> {
 
   if (!answer) {
     answer = 'No response generated.';
+  }
+
+  if (sessionId) {
+    await history.saveAnswer(answer);
+    const last = history.getMessages().slice(-1)[0];
+    if (last?.answer) {
+      await appendSessionMessage(sessionId, {
+        query: last.query,
+        answer: last.answer,
+        summary: last.summary,
+      });
+    }
   }
 
   return {

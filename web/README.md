@@ -56,6 +56,7 @@ Streaming endpoint that runs the Dexter agent and returns results via Server-Sen
 **Session continuity:** Use `memory.thread` to keep a per-session in-memory history on the server.
 
 **Config:** The route reads `DEXTER_MODEL_PROVIDER` and `DEXTER_MODEL` from env vars (defaults: `openai`, `gpt-5.2`). Max 10 tool-call steps per request.
+If `LANGSMITH_DEPLOYMENT_URL` and `LANGSMITH_API_KEY` are set, `/api/chat` proxies to the LangSmith Deployment instead of running the local agent.
 
 ## Running Locally
 
@@ -105,6 +106,8 @@ Set these in the Vercel project dashboard:
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key for the default model (gpt-5.2) |
 | `FINANCIAL_DATASETS_API_KEY` | Yes | Financial Datasets API key for market data |
+| `LANGSMITH_DEPLOYMENT_URL` | No | LangSmith Deployment base URL (enables proxy mode) |
+| `LANGSMITH_API_KEY` | No | Required with `LANGSMITH_DEPLOYMENT_URL` |
 | `LIBSQL_URL` | Yes | Turso LibSQL URL for persistent chat memory |
 | `LIBSQL_AUTH_TOKEN` | Yes | Turso auth token for the database above |
 | `EXASEARCH_API_KEY` | No | Exa search API key (preferred web search provider) |
