@@ -22,13 +22,12 @@ Intelligent meta-tool for financial data research. Takes a natural language quer
 - Company news and recent headlines
 - Insider trading activity
 - Current stock prices for equities
+- Historical stock prices (daily closes, OHLCV)
 - Cryptocurrency prices
 - Revenue segment breakdowns
 - Multi-company comparisons (pass the full query, it handles routing internally)
 
 ## When NOT to Use
-
-- Historical stock prices (use web_search instead)
 - General web searches or non-financial topics (use web_search instead)
 - Questions that don't require external financial data (answer directly from knowledge)
 - Non-public company information
@@ -57,12 +56,14 @@ import { getSegmentedRevenues } from './segments.js';
 import { getCryptoPriceSnapshot, getCryptoPrices, getCryptoTickers } from './crypto.js';
 import { getInsiderTrades } from './insider_trades.js';
 import { getStockPrice } from './stock-price.js';
+import { getHistoricalStockPrices } from './historical-prices.js';
 import { getCompanyNews } from './news.js';
 
 // All finance tools available for routing
 const FINANCE_TOOLS: StructuredToolInterface[] = [
   // Price Data
   getStockPrice,
+  getHistoricalStockPrices,
   getCryptoPriceSnapshot,
   getCryptoPrices,
   getCryptoTickers,
@@ -102,9 +103,11 @@ Given a user's natural language query about financial data, call the appropriate
    - "last quarter" → report_period_gte 3 months ago
    - "past 5 years" → report_period_gte 5 years ago and limit 5 (annual) or 20 (quarterly)
    - "YTD" → report_period_gte Jan 1 of current year
+   - For "last week" stock prices, use the most recent completed week (Mon–Fri) and set start_date/end_date
 
 3. **Tool Selection**:
    - For a current stock quote/snapshot (price, market cap now) → get_stock_price
+   - For historical daily stock prices (daily closes, OHLCV) → get_historical_stock_prices
    - For "historical" or "over time" data, use date-range tools
    - For historical P/E ratio, historical market cap, valuation metrics over time → get_key_ratios
    - For revenue, earnings, profitability → get_income_statements
@@ -146,7 +149,8 @@ export function createFinancialSearch(model: string): DynamicStructuredTool {
 - Company news and recent headlines
 - Insider trading activity
 - Current stock prices
-- Cryptocurrency prices. For historical stock prices use web_search instead.`,
+- Historical stock prices (daily closes, OHLCV)
+- Cryptocurrency prices.`,
     schema: FinancialSearchInputSchema,
     func: async (input, _runManager, config?: RunnableConfig) => {
       const onProgress = config?.metadata?.onProgress as ((msg: string) => void) | undefined;
