@@ -198,6 +198,27 @@ async function streamFromLangSmith(args: {
   textId: string;
 }) {
   const { send, query, sessionKey, deploymentUrl, apiKey, textId } = args;
+  const extractText = (chunk: unknown): string => {
+    if (!chunk || typeof chunk !== 'object') return '';
+    const candidate = chunk as { content?: unknown; text?: unknown };
+    if (typeof candidate.text === 'string') return candidate.text;
+    if (typeof candidate.content === 'string') return candidate.content;
+    if (Array.isArray(candidate.content)) {
+      return candidate.content
+        .map((part) =>
+          part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string'
+            ? ((part as { text: string }).text ?? '')
+            : ''
+        )
+        .join('');
+    }
+    return '';
+  };
+  const isFinalGraphMessage = (chunk: unknown): boolean => {
+    if (!chunk || typeof chunk !== 'object') return false;
+    const id = (chunk as { id?: unknown }).id;
+    return typeof id === 'string' && id.startsWith('run-');
+  };
 
   const apiUrl = deploymentUrl.replace(/\/+$/, '');
   const res = await fetch(`${apiUrl}/runs/stream`, {
@@ -239,6 +260,7 @@ async function streamFromLangSmith(args: {
   let currentEvent: string | null = null;
 
   let started = false;
+  let sawPartial = false;
   while (true) {
     const { done, value } = await reader.read();
     if (value) {
@@ -268,16 +290,30 @@ async function streamFromLangSmith(args: {
 
       try {
         const payload = JSON.parse(dataText);
-        if (currentEvent === 'messages' || currentEvent === 'messages/partial') {
+        if (currentEvent === 'messages/partial') {
+          sawPartial = true;
           const messageChunk = Array.isArray(payload) ? payload[0] : payload?.[0];
-          const delta = messageChunk?.content ?? messageChunk?.text ?? '';
-          if (delta) {
-            if (!started) {
-              send({ type: 'text-start', id: textId });
-              started = true;
-            }
-            send({ type: 'text-delta', id: textId, delta });
+          if (!isFinalGraphMessage(messageChunk)) continue;
+          const delta = extractText(messageChunk);
+          if (!delta) continue;
+          if (!started) {
+            send({ type: 'text-start', id: textId });
+            started = true;
           }
+          send({ type: 'text-delta', id: textId, delta });
+          continue;
+        }
+
+        if (currentEvent === 'messages' && !sawPartial) {
+          const messageChunk = Array.isArray(payload) ? payload[0] : payload?.[0];
+          if (!isFinalGraphMessage(messageChunk)) continue;
+          const delta = extractText(messageChunk);
+          if (!delta) continue;
+          if (!started) {
+            send({ type: 'text-start', id: textId });
+            started = true;
+          }
+          send({ type: 'text-delta', id: textId, delta });
         }
       } catch {
         // ignore parsing errors
