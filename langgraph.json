@@ -6,8 +6,10 @@
     "dexter": "./src/langgraph/dexter-graph.ts:app"
   },
   "http": {
-    "configurable_headers": [
-      "x-session-id"
-    ]
+    "configurable_headers": {
+      "includes": [
+        "x-session-id"
+      ]
+    }
   }
 }
