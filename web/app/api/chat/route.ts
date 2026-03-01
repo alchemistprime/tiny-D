@@ -28,6 +28,14 @@ function extractUserText(messages: IncomingMessage[]): string {
 
 type ToolCallRecord = { tool: string; id: string };
 
+function resolveMaxIterations(): number {
+  const raw = process.env.DEXTER_MAX_ITERATIONS;
+  if (!raw) return 10;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 10;
+  return Math.max(1, Math.floor(parsed));
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const messages = Array.isArray(body?.messages) ? (body.messages as IncomingMessage[]) : [];
@@ -43,6 +51,8 @@ export async function POST(req: Request) {
 
   const modelProvider = process.env.DEXTER_MODEL_PROVIDER ?? DEFAULT_PROVIDER;
   const model = process.env.DEXTER_MODEL ?? DEFAULT_MODEL;
+  const maxIterations = resolveMaxIterations();
+  const hasPersistentStore = Boolean(process.env.LIBSQL_URL);
   const sessionKey = memory?.thread || `web-${crypto.randomUUID()}`;
 
   const deploymentUrl = process.env.LANGSMITH_DEPLOYMENT_URL;
@@ -75,9 +85,11 @@ export async function POST(req: Request) {
           }
 
           const history = new InMemoryChatHistory(model);
-          const stored = await loadSessionMessages(sessionKey);
-          if (stored.length > 0) {
-            history.loadMessages(stored);
+          if (hasPersistentStore) {
+            const stored = await loadSessionMessages(sessionKey);
+            if (stored.length > 0) {
+              history.loadMessages(stored);
+            }
           }
 
           history.saveUserQuery(query);
@@ -85,7 +97,7 @@ export async function POST(req: Request) {
           const agent = await Agent.create({
             model,
             modelProvider,
-            maxIterations: 10,
+            maxIterations,
           });
 
           let finalAnswer = '';
@@ -136,7 +148,7 @@ export async function POST(req: Request) {
             }
           }
 
-          if (finalAnswer) {
+          if (finalAnswer && hasPersistentStore) {
             await history.saveAnswer(finalAnswer);
             const last = history.getMessages().slice(-1)[0];
             if (last?.answer) {
@@ -280,5 +292,4 @@ async function streamFromLangSmith(args: {
   }
   send({ type: 'finish-step' });
   send({ type: 'finish', finishReason: 'stop' });
-  controller.close();
 }

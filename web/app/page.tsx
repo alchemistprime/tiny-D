@@ -103,6 +103,33 @@ function clearStoredSessionId() {
   }
 }
 
+type ToolInvocation = {
+  toolCallId: string;
+  toolName: string;
+  state: string;
+  args?: unknown;
+};
+
+function extractToolInvocation(part: unknown): ToolInvocation | null {
+  if (!part || typeof part !== 'object') return null;
+  const candidate = part as { type?: unknown; toolInvocation?: unknown };
+  if (candidate.type !== 'tool-invocation' || !candidate.toolInvocation || typeof candidate.toolInvocation !== 'object') {
+    return null;
+  }
+  const invocation = candidate.toolInvocation as Record<string, unknown>;
+  const isValid =
+    typeof invocation.toolCallId === 'string' &&
+    typeof invocation.toolName === 'string' &&
+    typeof invocation.state === 'string';
+  if (!isValid) return null;
+  return {
+    toolCallId: invocation.toolCallId as string,
+    toolName: invocation.toolName as string,
+    state: invocation.state as string,
+    args: invocation.args,
+  };
+}
+
 export default function Chat() {
   const [sessionId, setSessionId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -164,10 +191,6 @@ export default function Chat() {
     }
   };
 
-  const handleSuggestion = (text: string) => {
-    setInput(text);
-  };
-
   return (
     <div className="flex flex-col h-screen max-w-5xl mx-auto">
       {/* Header */}
@@ -195,12 +218,6 @@ export default function Chat() {
               <span className="text-3xl font-semibold text-white">AlphaSentry</span>
             </div>
             <p className="text-[9px] text-gray-400">Your AI assistant for deep financial research.</p>
-            <div className="grid grid-cols-2 gap-3 mt-6 max-w-lg">
-              <SuggestionButton text="What's NVDA's current P/E ratio?" onClick={handleSuggestion} />
-              <SuggestionButton text="Compare AAPL and MSFT revenue" onClick={handleSuggestion} />
-              <SuggestionButton text="Latest insider trades for TSLA" onClick={handleSuggestion} />
-              <SuggestionButton text="Summarize META's latest 10-K" onClick={handleSuggestion} />
-            </div>
           </div>
         )}
 
@@ -208,6 +225,9 @@ export default function Chat() {
           const isLastMessage = message.id === messages[messages.length - 1]?.id;
           const isStreamingThis = status === 'streaming' && isLastMessage;
           const isActiveAssistant = isLastMessage && isLoading && message.role === 'assistant';
+          const toolInvocations = (message.parts ?? [])
+            .map(extractToolInvocation)
+            .filter((part): part is ToolInvocation => part !== null);
 
           return (
             <div key={message.id} className="space-y-2">
@@ -220,7 +240,7 @@ export default function Chat() {
               ) : (
                 <div className="space-y-4">
                   {/* Tool invocations */}
-                  {message.parts?.some(p => p.type === 'tool-invocation') && (
+                  {toolInvocations.length > 0 && (
                     <div className="flex items-start gap-3">
                       <Image
                         src="/logo.png"
@@ -231,16 +251,14 @@ export default function Chat() {
                       />
                       <div className="flex-1 bg-neutral-900 rounded-lg p-4 tool-status border border-neutral-800">
                         <div className="space-y-3">
-                          {message.parts
-                            ?.filter((p): p is Extract<typeof p, { type: 'tool-invocation' }> => p.type === 'tool-invocation')
-                            .map((part) => (
-                              <ToolStatusItem
-                                key={part.toolInvocation.toolCallId}
-                                name={part.toolInvocation.toolName}
-                                state={part.toolInvocation.state}
-                                args={part.toolInvocation.args as Record<string, unknown>}
-                              />
-                            ))}
+                          {toolInvocations.map((invocation) => (
+                            <ToolStatusItem
+                              key={invocation.toolCallId}
+                              name={invocation.toolName}
+                              state={invocation.state}
+                              args={invocation.args as Record<string, unknown> | undefined}
+                            />
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -311,18 +329,6 @@ export default function Chat() {
         </div>
       </form>
     </div>
-  );
-}
-
-function SuggestionButton({ text, onClick }: { text: string; onClick: (text: string) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(text)}
-      className="text-left bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-lg px-4 py-3 text-gray-400 hover:text-white transition-all"
-    >
-      {text}
-    </button>
   );
 }
 

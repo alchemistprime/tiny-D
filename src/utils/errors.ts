@@ -78,7 +78,7 @@ const ERROR_PATTERNS = {
 
 const CHINESE_CONTEXT_OVERFLOW = ['上下文过长', '上下文超出', '超出最大上下文'];
 const ERROR_PAYLOAD_PREFIX_RE = /^\[[\w\s]+\]\s*|^(?:error|api\s*error)[:\s-]+/i;
-const HTTP_STATUS_PREFIX_RE = /^(\d{3})\s+(.+)$/s;
+const HTTP_STATUS_PREFIX_RE = /^(\d{3})\s+([\s\S]+)$/;
 
 export function parseApiErrorInfo(raw?: string): ApiErrorInfo | null {
   if (!raw) return null;

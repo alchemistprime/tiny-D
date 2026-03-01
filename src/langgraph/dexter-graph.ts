@@ -59,6 +59,7 @@ async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Pa
   }
 
   const sessionId = resolveSessionId(state, config);
+  const hasPersistentStore = Boolean(process.env.LIBSQL_URL);
   const modelProvider = process.env.DEXTER_MODEL_PROVIDER;
   const model = process.env.DEXTER_MODEL;
   const maxIterations = process.env.DEXTER_MAX_ITERATIONS
@@ -66,7 +67,7 @@ async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Pa
     : undefined;
 
   const history = new InMemoryChatHistory(model);
-  if (sessionId) {
+  if (sessionId && hasPersistentStore) {
     const stored = await loadSessionMessages(sessionId);
     if (stored.length > 0) {
       history.loadMessages(stored);
@@ -92,7 +93,7 @@ async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Pa
     answer = 'No response generated.';
   }
 
-  if (sessionId) {
+  if (sessionId && hasPersistentStore) {
     await history.saveAnswer(answer);
     const last = history.getMessages().slice(-1)[0];
     if (last?.answer) {
