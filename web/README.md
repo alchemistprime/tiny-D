@@ -1,37 +1,65 @@
 # AlphaSentry Web
 
-Web interface for AlphaSentry, the AI-powered financial research assistant. Built with Next.js 15, Tailwind CSS, and backed by Dexter's LangChain-based agent runtime.
+Production web interface for AlphaSentry. Built with Next.js 15, Tailwind CSS, and the Vercel AI SDK. Deployed on Vercel.
 
-Currently lives as a subdirectory of the main Dexter repo. Designed for eventual extraction into a standalone application.
+**This is the production frontend only.** It does not run the agent directly — it proxies requests to a LangSmith Deployment that hosts the AlphaSentry LangGraph agent. For local agent development and testing, use the CLI (`bun start` from the repo root).
 
 ## Architecture
 
 ```
+Browser (Vercel)
+    │
+    ▼
+/api/chat (Next.js route — SSE proxy)
+    │
+    ▼
+LangSmith Deployment (LANGSMITH_DEPLOYMENT_URL)
+    │
+    ▼
+LangGraph (src/langgraph/dexter-graph.ts)
+    │
+    ▼
+Agent (src/agent/agent.ts) → Tools → Answer
+    │
+    ▼
+LibSQL/Turso (session persistence, optional)
+```
+
+### How It Works
+
+1. The web UI (`page.tsx`) sends chat messages to `/api/chat`
+2. The API route (`route.ts`) forwards the query to the LangSmith Deployment via `POST /runs/stream`
+3. LangSmith runs the compiled LangGraph, which instantiates the Agent, executes tools, and returns an answer
+4. The route relays the SSE stream back to the browser in Vercel AI SDK format
+5. Session history is persisted to Turso/LibSQL if `LIBSQL_URL` is configured on the LangSmith side
+
+The route requires `LANGSMITH_DEPLOYMENT_URL` and `LANGSMITH_API_KEY`. Without them, it returns a 500 error.
+
+## File Structure
+
+```
 web/
 ├── app/
-│   ├── api/chat/route.ts    # SSE streaming endpoint — bridges Dexter agent to the frontend
-│   ├── components/          # Reusable UI components (empty, page.tsx has everything inline for now)
-│   ├── globals.css          # Tailwind + Bindle brand theme (dark mode, red accent, financial table styling)
+│   ├── api/
+│   │   ├── chat/route.ts    # SSE proxy to LangSmith Deployment
+│   │   └── health/route.ts  # Health check endpoint
+│   ├── globals.css          # Tailwind + brand theme (dark mode, red accent)
 │   ├── layout.tsx           # Root layout with metadata
-│   └── page.tsx             # Main chat UI — messages, tool status, thinking indicators, markdown rendering
+│   └── page.tsx             # Chat UI — messages, tool status, streaming, markdown
 ├── public/
 │   └── logo.png             # AlphaSentry logo
 ├── next.config.ts           # Webpack aliases to resolve parent src/ imports
-├── tailwind.config.ts       # Bindle brand colors (red, black, grays)
+├── tailwind.config.ts       # Brand colors (red, black, grays)
 ├── package.json
+├── vercel.json              # Standalone Vercel config
 └── tsconfig.json
 ```
-
-### How It Connects to the Agent
-
-The web app calls Dexter's LangChain-based agent runtime through its own `/api/chat` route.
-The API route imports and runs the Dexter agent directly from `src/` in this repo.
 
 ## API
 
 ### `POST /api/chat`
 
-Streaming endpoint that runs the Dexter agent and returns results via Server-Sent Events.
+SSE proxy endpoint. Forwards queries to the LangSmith Deployment and relays streamed responses.
 
 **Request body:**
 
@@ -40,54 +68,55 @@ Streaming endpoint that runs the Dexter agent and returns results via Server-Sen
   "messages": [
     { "role": "user", "content": "What is AAPL's P/E ratio?" }
   ],
-  "sessionId": "optional-session-id"
+  "memory": { "thread": "optional-session-id" }
 }
 ```
 
-**Response:** Mixed SSE + Vercel AI SDK text stream.
+**Response:** Server-Sent Events stream.
 
-| Format | Event | Description |
-|--------|-------|-------------|
-| `data: {...}` | `tool_start` | Tool invocation begins |
-| `data: {...}` | `tool_end` | Tool completed |
-| `data: {...}` | `error` | Something went wrong |
-| `data: {...}` | `text-delta` | Streamed answer chunk |
+| Event | Description |
+|-------|-------------|
+| `start` | Message stream begins |
+| `text-start` | Text content begins |
+| `text-delta` | Streamed answer chunk |
+| `text-end` | Text content complete |
+| `finish-step` | Processing step complete |
+| `finish` | Stream complete |
+| `error` | Something went wrong |
 
-**Session continuity:** Use `memory.thread` to keep a per-session in-memory history on the server.
+**Session continuity:** Pass `memory.thread` with a consistent session ID to maintain conversation history across messages.
 
-**Config:** The route reads `DEXTER_MODEL_PROVIDER` and `DEXTER_MODEL` from env vars (defaults: `openai`, `gpt-5.2`). Max 10 tool-call steps per request.
-If `LANGSMITH_DEPLOYMENT_URL` and `LANGSMITH_API_KEY` are set, `/api/chat` proxies to the LangSmith Deployment instead of running the local agent.
+## Local Development
 
-## Running Locally
+**The web app is not designed for local agent testing.** Use the CLI instead:
 
-### Prerequisites
+```bash
+# From repo root — install deps and run the CLI agent
+bun install
+bun start
+```
 
-- [Bun](https://bun.sh) runtime
-- Parent repo dependencies installed (`bun install` from repo root)
-- A `.env` file at the repo root with at least `OPENAI_API_KEY` and `FINANCIAL_DATASETS_API_KEY`
+The CLI runs the same agent, same tools, same SOUL.md identity — just in a terminal UI instead of a browser. This is the primary development workflow.
 
-### Development
+### Running the web UI locally (optional)
+
+If you need to work on the frontend (styling, layout, UI behavior), you can run the Next.js dev server. It will still proxy to your LangSmith Deployment, so you need those env vars set:
 
 ```bash
 # From repo root
 bun install && cd web && bun install
 
-# Start dev server
+# Ensure .env has LANGSMITH_DEPLOYMENT_URL and LANGSMITH_API_KEY set
 cd web && bun run dev
 ```
 
-Opens at http://localhost:3000.
-
-### Production Build
-
-```bash
-cd web && bun run build
-bun run start
-```
+Opens at http://localhost:3000. The agent runs remotely via LangSmith — only the UI is local.
 
 ## Deployment (Vercel)
 
-The app deploys to Vercel from the repo root using the config in the root `vercel.json`:
+Deploys from the repo root. CI/CD pushes to Vercel automatically.
+
+**Root-level Vercel config:**
 
 ```json
 {
@@ -104,41 +133,33 @@ Set these in the Vercel project dashboard:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for the default model (gpt-5.2) |
-| `FINANCIAL_DATASETS_API_KEY` | Yes | Financial Datasets API key for market data |
-| `LANGSMITH_DEPLOYMENT_URL` | No | LangSmith Deployment base URL (enables proxy mode) |
-| `LANGSMITH_API_KEY` | No | Required with `LANGSMITH_DEPLOYMENT_URL` |
-| `LIBSQL_URL` | Yes | Turso LibSQL URL for persistent chat memory |
-| `LIBSQL_AUTH_TOKEN` | Yes | Turso auth token for the database above |
-| `EXASEARCH_API_KEY` | No | Exa search API key (preferred web search provider) |
-| `TAVILY_API_KEY` | No | Tavily API key (fallback if Exa not set) |
-| `ANTHROPIC_API_KEY` | No | Required if using Anthropic models |
-| `GOOGLE_API_KEY` | No | Required if using Google Gemini models |
-| `DEXTER_MODEL_PROVIDER` | No | Model provider override (default: `openai`) |
-| `DEXTER_MODEL` | No | Model override (default: `gpt-5.2`) |
+| `LANGSMITH_DEPLOYMENT_URL` | **Yes** | LangSmith Deployment base URL |
+| `LANGSMITH_API_KEY` | **Yes** | LangSmith API key for deployment access |
 
-Without `LIBSQL_URL`, the web chat memory cannot be persisted. Set up a [Turso](https://turso.tech) database for durable sessions.
+These are the only env vars the web app itself needs. All agent-related keys (`OPENAI_API_KEY`, `FINANCIAL_DATASETS_API_KEY`, etc.) are configured on the LangSmith Deployment side, not in Vercel.
 
 ### Vercel Notes
 
-- The API route uses `export const runtime = 'nodejs'` and `export const maxDuration = 300` (5 min timeout for agent tool-calling loops)
+- `export const runtime = 'nodejs'` and `export const maxDuration = 300` (5 min timeout for agent tool-calling loops)
 - `export const dynamic = 'force-dynamic'` prevents static generation of the API route
-- Dynamic `import()` inside the POST handler avoids agent/model validation at Next.js build time
-- The 401 errors on `GET /` and `/favicon.ico` in Vercel logs are from Vercel's password protection, not a code issue
+- 401 errors on `GET /` and `/favicon.ico` in Vercel logs are from Vercel's password protection, not a code issue
 
-## Agent Tools Available
+## Agent Tools
 
-The agent has access to these tools through the API:
+The agent (running on LangSmith) has access to these tools:
 
 | Tool | Description |
 |------|-------------|
-| `financial_search` | Primary financial data tool — prices, metrics, filings (routes to sub-tools internally) |
+| `financial_search` | Primary financial data tool — prices, metrics, filings, earnings (routes to sub-tools internally) |
 | `financial_metrics` | Direct metric lookups (revenue, market cap, P/E, etc.) |
 | `read_filings` | SEC filing reader for 10-K, 10-Q, 8-K documents |
-| `web_search` | General web search (Exa or Tavily depending on API keys) |
-| `web_fetch` | Read any web page content (articles, press releases) |
+| `web_search` | General web search (Exa, Perplexity, or Tavily depending on API keys) |
+| `web_fetch` | Fetch and summarize web page content |
 | `browser` | Playwright-based browser for JavaScript-rendered pages |
-| `skill` | Invoke SKILL.md workflows (e.g., DCF valuation) |
+| `x_search` | X/Twitter sentiment search (requires `X_BEARER_TOKEN`) |
+| `heartbeat` | Manage periodic monitoring checklist |
+| `memory_search` / `memory_get` / `memory_update` | Persistent memory read/write |
+| `skill` | Invoke SKILL.md workflows (e.g., DCF valuation, X-Research) |
 
 ## Frontend Details
 
@@ -147,31 +168,20 @@ The agent has access to these tools through the API:
 Single-page chat interface with:
 
 - **Message history** — user and assistant messages with markdown rendering (react-markdown + remark-gfm)
-- **Tool status indicators** — real-time display of tool invocations with spinners, completion times, and argument previews
+- **Tool status indicators** — real-time display of tool invocations with friendly labels ("Money Hunt", "Filing Finder", etc.)
 - **Thinking animations** — rotating verbs ("Analyzing...", "Correlating...", "Synthesizing...") while the agent works
 - **Composing indicator** — shown after tools complete but before text streams
 - **Suggested queries** — starter prompts on empty state
-- **Session management** — "New Chat" button resets session; session ID persists across messages for memory continuity
+- **Session management** — "New Chat" button resets session; session ID persists in localStorage
 - **Streaming cursor** — red pulsing cursor during text generation
 - **Abort support** — AbortController on fetch for cancellation
 
 ### Theming
 
-Bindle brand palette defined in `globals.css` and `tailwind.config.ts`:
+Brand palette defined in `globals.css` and `tailwind.config.ts`:
 
 - Background: `#0a0a0a` (near-black)
-- Accent: `#ff0000` (Bindle red)
+- Accent: `#ff0000` (red)
 - Font: Inter
 - Financial tables: monospaced numeric columns, right-aligned, alternating row backgrounds
 - Custom scrollbar, tool spinners, and dot-pulse animations
-
-## Standalone Extraction Notes
-
-When porting to a standalone app, the main changes needed:
-
-1. **Replace in-repo agent import** — point `/api/chat` to a hosted API or published package
-2. **Remove webpack aliases** — the `@dexter` and `@` aliases in `next.config.ts` that point to `../src`
-3. **Remove `transpilePackages`** — no longer needed if agent code is a separate package
-4. **Self-contained env** — `.env` would live in the web app root instead of the parent
-5. **Own `vercel.json`** — the `web/vercel.json` already has a standalone config; use it instead of the root one
-6. **Components directory** — extract inline components from `page.tsx` into `app/components/` (ToolStatusItem, ThinkingIndicator, ComposingIndicator, SuggestionButton, etc.)

@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       '@': path.resolve(__dirname, '..', 'src'),
-      '@dexter': path.resolve(__dirname, '..', 'src'),
+      '@alphasentry': path.resolve(__dirname, '..', 'src'),
     };
     config.resolve.extensionAlias = {
       '.js': ['.ts', '.tsx', '.js'],

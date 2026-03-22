@@ -14,7 +14,7 @@ describe('access control', () => {
   });
 
   test('records pairing request for unknown sender', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'dexter-pairing-'));
+    const dir = mkdtempSync(join(tmpdir(), 'alphasentry-pairing-'));
     const path = join(dir, 'whatsapp.json');
     process.env.DEXTER_PAIRING_PATH = path;
     try {

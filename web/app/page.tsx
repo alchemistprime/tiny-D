@@ -31,7 +31,7 @@ const MarkdownText = memo(function MarkdownText({
 });
 
 // Always route through the Next.js proxy at /api/chat.
-// The proxy bridges the UI to Dexter's LangChain-based agent runtime.
+// The proxy bridges the UI to AlphaSentry's LangChain-based agent runtime.
 const CHAT_API = '/api/chat';
 
 const THINKING_VERBS = [
@@ -81,7 +81,7 @@ function formatToolName(name: string): string {
 function getStoredSessionId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem('dexter_session_id');
+    return window.localStorage.getItem('alphasentry_session_id');
   } catch {
     return null;
   }
@@ -89,7 +89,7 @@ function getStoredSessionId(): string | null {
 
 function storeSessionId(id: string) {
   try {
-    window.localStorage.setItem('dexter_session_id', id);
+    window.localStorage.setItem('alphasentry_session_id', id);
   } catch {
     // ignore storage errors
   }
@@ -97,7 +97,7 @@ function storeSessionId(id: string) {
 
 function clearStoredSessionId() {
   try {
-    window.localStorage.removeItem('dexter_session_id');
+    window.localStorage.removeItem('alphasentry_session_id');
   } catch {
     // ignore storage errors
   }

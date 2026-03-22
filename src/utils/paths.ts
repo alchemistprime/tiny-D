@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-const DEXTER_DIR = '.dexter';
+const DEXTER_DIR = '.alphasentry';
 
 export function getDexterDir(): string {
   return DEXTER_DIR;

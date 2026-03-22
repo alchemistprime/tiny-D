@@ -79,7 +79,7 @@ function buildMemorySection(memoryFiles: string[]): string {
 
   return `## Memory
 
-You have persistent memory stored as Markdown files in .dexter/memory/.${fileListSection}
+You have persistent memory stored as Markdown files in .alphasentry/memory/.${fileListSection}
 
 ### Recalling memories
 Use memory_search to recall stored facts, preferences, or notes. The search covers all
@@ -102,7 +102,7 @@ Before editing or deleting, use memory_get to verify the exact text to match.`;
 /**
  * Default system prompt used when no specific prompt is provided.
  */
-export const DEFAULT_SYSTEM_PROMPT = `You are Dexter, a helpful AI assistant.
+export const DEFAULT_SYSTEM_PROMPT = `You are AlphaSentry, a helpful AI assistant.
 
 Current date: ${getCurrentDate()}
 
@@ -207,7 +207,7 @@ export function buildSystemPrompt(
     ? `\n## Tables (for comparative/tabular data)\n\n${profile.tables}`
     : '';
 
-  return `You are Dexter, a ${profile.label} assistant with access to research tools.
+  return `You are AlphaSentry, a ${profile.label} assistant with access to research tools.
 
 Current date: ${getCurrentDate()}
 
@@ -236,7 +236,7 @@ ${buildMemorySection(memoryFiles ?? [])}
 ## Heartbeat
 
 You have a periodic heartbeat that runs on a schedule (configurable by the user).
-The heartbeat reads .dexter/HEARTBEAT.md to know what to check.
+The heartbeat reads .alphasentry/HEARTBEAT.md to know what to check.
 Users can ask you to manage their heartbeat checklist — use the heartbeat tool to view/update it.
 Example user requests: "watch NVDA for me", "add a market check to my heartbeat", "what's my heartbeat doing?"
 

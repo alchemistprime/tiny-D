@@ -7,7 +7,7 @@ import { dexterPath } from '../../utils/paths.js';
 const HEARTBEAT_MD_PATH = dexterPath('HEARTBEAT.md');
 
 export const HEARTBEAT_TOOL_DESCRIPTION = `
-Manage your periodic heartbeat checklist (.dexter/HEARTBEAT.md).
+Manage your periodic heartbeat checklist (.alphasentry/HEARTBEAT.md).
 The heartbeat runs on a schedule and uses this checklist to decide what to check.
 
 ## When to Use
@@ -39,7 +39,7 @@ const heartbeatSchema = z.object({
 export const heartbeatTool = new DynamicStructuredTool({
   name: 'heartbeat',
   description:
-    'View or update the heartbeat checklist (.dexter/HEARTBEAT.md) that controls periodic monitoring.',
+    'View or update the heartbeat checklist (.alphasentry/HEARTBEAT.md) that controls periodic monitoring.',
   schema: heartbeatSchema,
   func: async (input) => {
     if (input.action === 'view') {

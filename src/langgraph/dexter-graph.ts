@@ -49,7 +49,7 @@ function resolveSessionId(state: GraphState, config?: RunnableConfig): string | 
   return undefined;
 }
 
-async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Partial<GraphState>> {
+async function runAlphaSentry(state: GraphState, config?: RunnableConfig): Promise<Partial<GraphState>> {
   const query = resolveQuery(state).trim();
   if (!query) {
     return {
@@ -112,9 +112,9 @@ async function runDexter(state: GraphState, config?: RunnableConfig): Promise<Pa
 }
 
 const graph = new StateGraph(State)
-  .addNode('dexter', runDexter)
-  .addEdge(START, 'dexter')
-  .addEdge('dexter', END);
+  .addNode('alphasentry', runAlphaSentry)
+  .addEdge(START, 'alphasentry')
+  .addEdge('alphasentry', END);
 
 export const app = graph.compile();
 

@@ -40,7 +40,7 @@ function getActive(accountId?: string): ActiveListener {
   }
   const first = listeners.values().next().value as ActiveListener | undefined;
   if (!first) {
-    throw new Error('No active WhatsApp listener. Run dexter gateway run.');
+    throw new Error('No active WhatsApp listener. Run alphasentry gateway run.');
   }
   return first;
 }

@@ -10,7 +10,7 @@ import {
 
 describe('session store', () => {
   test('creates and updates session metadata', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'dexter-sessions-'));
+    const dir = mkdtempSync(join(tmpdir(), 'alphasentry-sessions-'));
     process.env.DEXTER_SESSIONS_DIR = dir;
     try {
       const storePath = resolveSessionStorePath('agentA');

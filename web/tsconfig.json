@@ -20,7 +20,7 @@
     ],
     "paths": {
       "@/*": ["../src/*"],
-      "@dexter/*": ["../src/*"]
+      "@alphasentry/*": ["../src/*"]
     }
   },
   "include": ["next-env.d.ts", "app/**/*.ts", "app/**/*.tsx", ".next/types/**/*.ts", "../src/**/*.ts"],

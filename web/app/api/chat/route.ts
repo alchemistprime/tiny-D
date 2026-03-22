@@ -141,7 +141,7 @@ async function streamFromLangSmith(args: {
       'x-session-id': sessionKey,
     },
     body: JSON.stringify({
-      assistant_id: 'dexter',
+      assistant_id: 'alphasentry',
       input: {
         messages: [
           {

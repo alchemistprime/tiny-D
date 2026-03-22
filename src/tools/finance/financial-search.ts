@@ -22,7 +22,7 @@ Intelligent meta-tool for financial data research. Takes a natural language quer
 - Company news and recent headlines
 - Insider trading activity
 - Current stock prices for equities
-- Historical stock prices (daily closes, OHLCV, date ranges)
+- Historical stock prices over date ranges
 - Cryptocurrency prices
 - Revenue segment breakdowns
 - Multi-company comparisons (pass the full query, it handles routing internally)
@@ -57,15 +57,14 @@ import { getSegmentedRevenues } from './segments.js';
 import { getCryptoPriceSnapshot, getCryptoPrices, getCryptoTickers } from './crypto.js';
 import { getInsiderTrades } from './insider_trades.js';
 import { getStockPrice, getStockPrices, getStockTickers } from './stock-price.js';
-import { getHistoricalStockPrices } from './historical-prices.js';
 import { getHistoricalKeyRatios } from './key-ratios.js';
 import { getCompanyNews } from './news.js';
+import { getEarnings } from './earnings.js';
 
 // All finance tools available for routing
 const FINANCE_TOOLS: StructuredToolInterface[] = [
   // Price Data
   getStockPrice,
-  getHistoricalStockPrices,
   getStockPrices,
   getStockTickers,
   getCryptoPriceSnapshot,
@@ -76,6 +75,8 @@ const FINANCE_TOOLS: StructuredToolInterface[] = [
   getBalanceSheets,
   getCashFlowStatements,
   getAllFinancialStatements,
+  // Earnings
+  getEarnings,
   // Key Ratios, Snapshots & Estimates
   getKeyRatios,
   getHistoricalKeyRatios,
@@ -108,15 +109,15 @@ Given a user's natural language query about financial data, call the appropriate
    - "last quarter" → report_period_gte 3 months ago
    - "past 5 years" → report_period_gte 5 years ago and limit 5 (annual) or 20 (quarterly)
    - "YTD" → report_period_gte Jan 1 of current year
-   - For "last week" stock prices, use the most recent completed week (Mon–Fri) and set start_date/end_date
 
 3. **Tool Selection**:
    - For a current stock quote/snapshot (price, market cap now) → get_stock_price
-   - For historical daily stock prices (daily closes, OHLCV) → get_historical_stock_prices or get_stock_prices
+   - For historical stock prices over a date range → get_stock_prices
    - For "historical" or "over time" data, use date-range tools
    - For latest financial metrics snapshot (P/E, margins, ROE, EPS, growth rates) → get_key_ratios
    - For historical P/E ratio, historical market cap, valuation metrics over time → get_historical_key_ratios
    - For revenue, earnings, profitability → get_income_statements
+   - For latest earnings release snapshot, EPS/revenue beat-miss, earnings surprises → get_earnings
    - For debt, assets, equity → get_balance_sheets
    - For cash flow, free cash flow → get_cash_flow_statements
    - For news, catalysts, "why did X move", recent announcements → get_company_news

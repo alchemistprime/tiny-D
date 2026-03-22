@@ -1,11 +1,11 @@
 {
-  "name": "dexter-ts",
+  "name": "alpha-sentry",
   "version": "2026.3.8",
-  "description": "Dextr - AI agent for deep financial research.",
+  "description": "AlphaSentry - AI agent for deep financial research.",
   "type": "module",
   "main": "src/index.tsx",
   "bin": {
-    "dexter-ts": "./src/index.tsx"
+    "alpha-sentry": "./src/index.tsx"
   },
   "scripts": {
     "start": "bun run src/index.tsx",

@@ -24,7 +24,7 @@ const MESSAGES_FILE = 'chat_history.json';
 /**
  * Manages persistent storage of conversation history for input history navigation.
  * Uses stack ordering (most recent first) for O(1) access to latest entries.
- * Stores messages in .dexter/messages/chat_history.json
+ * Stores messages in .alphasentry/messages/chat_history.json
  */
 export class LongTermChatHistory {
   private filePath: string;

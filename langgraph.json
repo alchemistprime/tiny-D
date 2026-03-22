@@ -3,7 +3,7 @@
     "."
   ],
   "graphs": {
-    "dexter": "./src/langgraph/dexter-graph.ts:app"
+    "alphasentry": "./src/langgraph/dexter-graph.ts:app"
   },
   "http": {
     "configurable_headers": {

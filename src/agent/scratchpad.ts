@@ -55,7 +55,7 @@ const DEFAULT_LIMIT_CONFIG: ToolLimitConfig = {
 /**
  * Append-only scratchpad for tracking agent work on a query.
  * Uses JSONL format (newline-delimited JSON) for resilient appending.
- * Files are persisted in .dexter/scratchpad/ for debugging/history.
+ * Files are persisted in .alphasentry/scratchpad/ for debugging/history.
  * 
  * This is the single source of truth for all agent work on a query.
  * 
